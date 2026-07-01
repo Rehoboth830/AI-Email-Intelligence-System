@@ -1,0 +1,829 @@
+{
+  "name": "AI Email Intelligence System",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert Email Intelligence Analyst.\nAnalyze the email below carefully and extract structured information accurately.\nEmail Details\nSender:\n{{ $json.sender }}\nSubject:\n{{ $json.subject }}\nBody:\n{{ $json.body }}\nReceived:\n{{ $json.received_at }}\nInstructions\n1. Write a concise summary of the email in one or two sentences.\n2. Assign exactly one priority:\n- High\n- Medium\n- Low\n3. Classify the email into exactly one category:\n- Meeting\n- Finance\n- Work\n- Support\n- Marketing\n- Personal\n- Notification\n- Security\n- Other\n4. Set \"\"important\"\" to \"true\" only if the email requires attention or action. Otherwise set it to \"false\".\n5. Extract every actionable task into the \"action_items\" array.\n6. Determine whether the email contains a meeting invitation or meeting schedule.\n- If yes, set \"\"has_meeting\"\" to \"true\".\n- Otherwise, set it to \"false\".\n7. If the email contains a meeting:\n- Extract the meeting date exactly as it appears in the email.\n  \n  - \"Tomorrow\" → \"Tomorrow\"\n  - \"Next Monday\" → \"Next Monday\"\n  - \"June 30, 2026\" → \"June 30, 2026\"\n- Extract the meeting time exactly as written.\n  \n  - \"2:00 PM\"\n  - \"10 AM\"\n  - \"14:30\"\n8. Only return \"null\" for \"meeting_date\" or \"meeting_time\" if the email truly does not mention them.\n9. Base every conclusion only on the email content. Do not invent information.\n10. Assign a confidence score between 0 and 100 reflecting how confident you are in your classification and extraction.\n- 90–100 = Very confident. Email is clear and unambiguous.\n- 70–89 = Confident. Minor ambiguity but conclusion is clear.\n- 50–69 = Uncertain. Email is vague or could fit multiple categories.\n- Below 50 = Very uncertain. Insufficient information to classify reliably.\nOutput Requirements\nReturn ONLY a single valid JSON object.\nDo NOT wrap the JSON in Markdown.\nDo NOT use \"json or \".\nDo NOT include explanations, notes, comments, greetings, or any text before or after the JSON.\nThe response must begin with \"{\" and end with \"}\".\nThe JSON object must contain exactly these fields:\n{\n  \"summary\": \"string\",\n  \"priority\": \"High | Medium | Low\",\n  \"category\": \"Meeting | Finance | Work | Support | Marketing | Personal | Notification | Security | Other\",\n  \"important\": true,\n  \"action_items\": [\n    \"string\"\n  ],\n  \"has_meeting\": false,\n  \"meeting_date\": null,\n  \"meeting_time\": null,\n  \"confidence_score\": 85\n}\nRules:\n- \"summary\" must always be a string.\n- \"priority\" must always be one of: High, Medium, Low.\n- \"category\" must always be one of the listed categories.\n- \"important\" must always be a boolean (\"true\" or \"false\").\n- \"action_items\" must always be an array. If there are no tasks, return an empty array \"[]\".\n- \"has_meeting\" must always be a boolean.\n- \"meeting_date\" must be either the exact text from the email or \"null\".\n- \"meeting_time\" must be either the exact text from the email or \"null\".\n- \"confidence_score\" must always be a number between 0 and 100.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -480,
+        -224
+      ],
+      "id": "89eb3485-dded-48f1-bbd2-c5c6e55d3978",
+      "name": "Analyze Email",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {
+          "maxOutputTokens": 2048,
+          "temperature": 0.1,
+          "topK": 32,
+          "topP": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -832,
+        0
+      ],
+      "id": "6d9e3d39-ba07-45ff-ac17-b57162b7d6f7",
+      "name": "Gemini AI Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vG6fxWdJNoJ80N8G",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc1ff4ce-ebfb-4f0d-8d35-35c081b5bd18",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "197a4905-fadd-4aa8-ae2c-154d99a0e8f9",
+              "name": "sender",
+              "value": "={{ $json.from.value[0].address }}",
+              "type": "string"
+            },
+            {
+              "id": "d1727c0a-93ec-40e9-ab61-1f022bb32486",
+              "name": "body",
+              "value": "={{\n  $json.text\n    .replace(/<[^>]*>/g, ' ')\n    .replace(/(\\r?\\n>.*)+/g, '')\n    .replace(/\\s{2,}/g, ' ')\n    .trim()\n    .substring(0, 2000)\n}}",
+              "type": "string"
+            },
+            {
+              "id": "99503000-0534-494c-83db-9c2ce5a05331",
+              "name": "received_at",
+              "value": "={{ $json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "9c289611-c623-4730-8101-6e2d7905d22a",
+              "name": "message_id",
+              "value": "={{ $json.messageId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -688,
+        -224
+      ],
+      "id": "b1d9b2e1-c293-4eef-9c4a-bf3fbddc5556",
+      "name": "Prepare Email for AI"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "maxResults": 1,
+        "filters": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -912,
+        -224
+      ],
+      "id": "ed72ccf4-8b0e-414d-be24-51daa451bccf",
+      "name": "New Email Received",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SUMRDJOoj4Zb9h0h",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "38cc50f4-1ec8-8078-9776-e36fe4ca5e79",
+          "mode": "list",
+          "cachedResultName": "AI Email Intelligence System",
+          "cachedResultUrl": "https://app.notion.com/p/38cc50f41ec880789776e36fe4ca5e79"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Action Items|rich_text",
+              "textContent": "={{ $json.action_items || '' }}"
+            },
+            {
+              "key": "Category|select",
+              "selectValue": "={{ $json.category }}"
+            },
+            {
+              "key": "Meeting Time|rich_text",
+              "textContent": "={{ $json.meeting_time || '' }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "={{ $json.priority }}"
+            },
+            {
+              "key": "Sender|rich_text",
+              "textContent": "={{ $('Prepare Email for AI').item.json.sender || '' }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "New"
+            },
+            {
+              "key": "Subject|title",
+              "title": "={{ $('Prepare Email for AI').item.json.subject }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Has meeting|checkbox",
+              "checkboxValue": "={{ $json.has_meeting }}"
+            },
+            {
+              "key": "Important|checkbox",
+              "checkboxValue": "={{ $json.important }}"
+            },
+            {
+              "key": "Meeting Date|date",
+              "includeTime": false,
+              "date": "={{ $json.meeting_date || '' }}"
+            },
+            {
+              "key": "Received At|date",
+              "date": "={{ $('Prepare Email for AI').item.json.received_at }}"
+            },
+            {
+              "key": "Message ID|rich_text",
+              "textContent": "={{ $('Prepare Email for AI').item.json.message_id }}"
+            },
+            {
+              "key": "Confidence Score|number",
+              "numberValue": "={{ $json.confidence_score }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        -32
+      ],
+      "id": "6a952050-2ecc-45ea-b124-895e4d049b08",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "ONAwgeJ1Xe8qRTuz",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 1: Safely extract JSON from AI output (handles markdown wrapping)\nlet raw = ($json.output || '').toString().trim();\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nif (!match) {\n  throw new Error('AI did not return valid JSON. Raw output: ' + raw.substring(0, 200));\n}\nlet aiOutput;\ntry {\n  aiOutput = JSON.parse(match[0]);\n} catch (e) {\n  throw new Error('Failed to parse AI JSON: ' + e.message);\n}\n\n// Step 2: Convert action items array to readable bullet text\nif (Array.isArray(aiOutput.action_items) && aiOutput.action_items.length > 0) {\n  aiOutput.action_items = '• ' + aiOutput.action_items.join('\\n• ');\n} else {\n  aiOutput.action_items = '';\n}\n\n// Step 3: Resolve relative meeting dates to ISO format\nif (aiOutput.meeting_date) {\n  const today = new Date();\n  const value = aiOutput.meeting_date.trim().toLowerCase();\n  let meetingDate = null;\n  if (value === 'today') {\n    meetingDate = new Date(today);\n  } else if (value === 'tomorrow') {\n    meetingDate = new Date(today);\n    meetingDate.setDate(today.getDate() + 1);\n  } else {\n    const parsed = new Date(aiOutput.meeting_date);\n    if (!isNaN(parsed.getTime())) {\n      meetingDate = parsed;\n    }\n  }\n  aiOutput.meeting_date = meetingDate\n    ? meetingDate.toISOString().split('T')[0]\n    : null;\n}\n\n// Step 4: Null guards — rich_text fields must never be null\naiOutput.meeting_time = aiOutput.meeting_time || '';\naiOutput.summary = aiOutput.summary || '';\n\n// Step 5: Select fields must never be null\naiOutput.priority = aiOutput.priority || 'Low';\naiOutput.category = aiOutput.category || 'Other';\n\n// Step 6: Boolean fields must always be boolean\naiOutput.important = typeof aiOutput.important === 'boolean' ? aiOutput.important : false;\naiOutput.has_meeting = typeof aiOutput.has_meeting === 'boolean' ? aiOutput.has_meeting : false;\n\nconst rawScore = aiOutput.confidence_score;\nconst parsedScore = parseInt(rawScore, 10);\naiOutput.confidence_score = !isNaN(parsedScore)\n  ? Math.min(100, Math.max(0, parsedScore))\n  : 0;\naiOutput.low_confidence = aiOutput.confidence_score < 70;\n\n// Step 8: Validate required AI output\nconst validationErrors = [];\nif (!aiOutput.summary.trim()) {\n  validationErrors.push('Summary is missing');\n}\nif (!aiOutput.priority) {\n  validationErrors.push('Priority is missing');\n}\nif (!aiOutput.category) {\n  validationErrors.push('Category is missing');\n}\n\n// Add validation status to output\naiOutput.isValid = validationErrors.length === 0;\naiOutput.validationErrors = validationErrors.join(', ');\n\n// Return the enriched AI output\nreturn [{ json: aiOutput }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        176
+      ],
+      "id": "0ff363c7-bf2d-4d0d-9994-7b006c3ed797",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('New Email Received').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        144,
+        -48
+      ],
+      "id": "52a94aca-e1a8-4ae5-85a5-9e4ac36413c5",
+      "name": "Mark a message as read",
+      "webhookId": "dfdfedd3-628d-4cc7-9e7a-056999ef23ef",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SUMRDJOoj4Zb9h0h",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Code in JavaScript').item.json.priority }}",
+                    "rightValue": "High",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d5c1854e-3de1-4fec-9acb-0f9da13546a3"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "High Priority"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "cf8292b5-04c8-4133-88dc-d21d8a7fe918",
+                    "leftValue": "={{ $('Code in JavaScript').item.json.category }}",
+                    "rightValue": "Meeting",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Meeting"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "412742b2-bdd2-44fe-81bf-63c452a61115",
+                    "leftValue": "={{ $('Code in JavaScript').item.json.category }}",
+                    "rightValue": "Security",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Security"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d925d50d-9105-4fa2-8a42-26b0e63c213f",
+                    "leftValue": "={{ $('Code in JavaScript').item.json.category }}",
+                    "rightValue": "Finance",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Finance"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f159c7df-170c-4cb8-9f54-7dcc8024895b",
+                    "leftValue": "={{ $('Code in JavaScript').item.json.category }}",
+                    "rightValue": "Marketing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Marketing"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none",
+          "allMatchingOutputs": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        304,
+        -192
+      ],
+      "id": "c80fb8a0-25d8-418c-b0b1-6c60da7dc1b4",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "sendTo": "olugbengatope15@gmail.com",
+        "subject": "=🔴 High Priority Email: {{ $('Code in JavaScript').item.json.summary }}",
+        "message": "=<h2 style=\"color:#cc0000;\">🔴 High Priority Email Detected</h2>\n\n<p><strong>From:</strong> {{ $('Prepare Email for AI').item.json.sender }}</p>\n<p><strong>Subject:</strong> {{ $('Prepare Email for AI').item.json.subject }}</p>\n<p><strong>Received:</strong> {{ $('Prepare Email for AI').item.json.received_at }}</p>\n\n<hr/>\n\n<p><strong>Summary:</strong><br/>\n{{ $('Code in JavaScript').item.json.summary }}</p>\n\n<p><strong>Action Items:</strong><br/>\n{{ $('Code in JavaScript').item.json.action_items }}</p>\n\n<hr/>\n<p style=\"color:#888; font-size:12px;\">Sent automatically by your AI Email Intelligence System</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        -256
+      ],
+      "id": "a0e8c2b3-3435-40bc-8490-2e11c0d817f8",
+      "name": "High Priority Alert",
+      "webhookId": "c1ea3c7b-7da8-4966-b508-42ad47820590",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SUMRDJOoj4Zb9h0h",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "olugbengatope15@gmail.com",
+        "subject": "=🚨 SECURITY ALERT: {{ $('Prepare Email for AI').item.json.subject }}",
+        "message": "=<h2 style=\"color:#cc0000;\">🚨 Security Email Detected</h2>\n\n<p><strong>From:</strong> {{ $('Prepare Email for AI').item.json.sender }}</p>\n<p><strong>Subject:</strong> {{ $('Prepare Email for AI').item.json.subject }}</p>\n<p><strong>Received:</strong> {{ $('Prepare Email for AI').item.json.received_at }}</p>\n\n<hr/>\n\n<p><strong>Summary:</strong><br/>\n{{ $('Code in JavaScript').item.json.summary }}</p>\n\n<p><strong>Action Items:</strong><br/>\n{{ $('Code in JavaScript').item.json.action_items }}</p>\n\n<hr/>\n<p style=\"color:#cc0000; font-size:13px;\">⚠️ Please review this email immediately.</p>\n<p style=\"color:#888; font-size:12px;\">Sent automatically by your AI Email Intelligence System</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        -96
+      ],
+      "id": "5846ae47-2b6b-444c-87cd-41710b9d95a6",
+      "name": "Security Alert",
+      "webhookId": "338624a0-91d2-4f2e-b647-59804fdb753a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SUMRDJOoj4Zb9h0h",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "38ec50f4-1ec8-80f8-bda8-eb9d25d1c284",
+          "mode": "list",
+          "cachedResultName": "Finance Email Tracker",
+          "cachedResultUrl": "https://app.notion.com/p/38ec50f41ec880f8bda8eb9d25d1c284"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Action Items|rich_text",
+              "textContent": "={{ $('Code in JavaScript').item.json.action_items || '' }}"
+            },
+            {
+              "key": "Received At|date",
+              "includeTime": false,
+              "date": "={{ $('Prepare Email for AI').item.json.received_at || null }}"
+            },
+            {
+              "key": "Sender|rich_text",
+              "textContent": "={{ $('Prepare Email for AI').item.json.sender || '' }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $('Code in JavaScript').item.json.summary || '' }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "New"
+            },
+            {
+              "key": "Subject|title",
+              "title": "={{ $('Prepare Email for AI').item.json.subject || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        64
+      ],
+      "id": "d69ed117-e251-4913-833c-572032789752",
+      "name": "Store in Finance DB",
+      "credentials": {
+        "notionApi": {
+          "id": "xR4T4BUaTfWym7j1",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('New Email Received').item.json.id }}",
+        "labelIds": [
+          "Label_1787142353554599229"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        224
+      ],
+      "id": "210791d1-9711-4597-9016-878ca591fbc3",
+      "name": "Label As Marketing",
+      "webhookId": "ba024894-813d-490a-b498-45b9a033acb4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SUMRDJOoj4Zb9h0h",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "34f5181f-12b8-432b-9d1c-c728342cff9b",
+              "name": "status",
+              "value": "Validation Failed",
+              "type": "string"
+            },
+            {
+              "id": "0d82ffe8-b72b-42d6-8717-d6e9b9366c32",
+              "name": "reason",
+              "value": "={{ $json.validationErrors }}",
+              "type": "string"
+            },
+            {
+              "id": "d1281995-6762-49b2-b832-76532a8b4e32",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "c0318ed9-382a-4fc7-b659-36418bc80dc6",
+              "name": "priority",
+              "value": "={{ $json.priority }}",
+              "type": "string"
+            },
+            {
+              "id": "6ecf45ab-eadf-4df8-a81e-41e3968d5093",
+              "name": "category",
+              "value": "={{ $json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "497c28a2-7e03-4eec-b333-f38afe105af3",
+              "name": "summary",
+              "value": "={{ $json.summary }}",
+              "type": "string"
+            },
+            {
+              "id": "0104ef3c-65ed-4e63-b1a1-ae01840d04ed",
+              "name": "time",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "468c07da-3ec0-4703-98f4-d36269ae6146",
+      "name": "Validation Failed"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "38ec50f4-1ec8-80a8-982e-c4cdb93a358a",
+          "mode": "list",
+          "cachedResultName": "Workflow Logs",
+          "cachedResultUrl": "https://app.notion.com/p/38ec50f41ec880a8982ec4cdb93a358a"
+        },
+        "title": "=",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Category|select",
+              "selectValue": "={{ $json.category }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "={{ $json.priority }}"
+            },
+            {
+              "key": "Reason|rich_text",
+              "textContent": "={{ $json.reason }}"
+            },
+            {
+              "key": "Subject|rich_text",
+              "textContent": "={{ $('Prepare Email for AI').item.json.subject || '' }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary || '' }}"
+            },
+            {
+              "key": "Time|date",
+              "date": "={{ $json.time }}"
+            },
+            {
+              "key": "Title|title",
+              "title": "Validation Failed"
+            },
+            {
+              "key": "status|select",
+              "selectValue": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        224
+      ],
+      "id": "1e9b39cb-e030-42c3-a8ca-28e714775acb",
+      "name": "Store Workflow Log",
+      "credentials": {
+        "notionApi": {
+          "id": "CCdEAm7c36gu9wi8",
+          "name": "Notion account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6c43707f-536e-4380-a0aa-fb9cdb3f09c3",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -352,
+        64
+      ],
+      "id": "03ea8388-5a8d-4eb6-9ab8-4f76a54f3ff9",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gemini AI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyze Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email for AI": {
+      "main": [
+        [
+          {
+            "node": "Analyze Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Email Received": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Email": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "Mark a message as read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "High Priority Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Security Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Store in Finance DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Label As Marketing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark a message as read": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Failed": {
+      "main": [
+        [
+          {
+            "node": "Store Workflow Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c5192f9e-d949-4ca9-a220-3fd60362f9f4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ed6255294cc924c59b7f1af6bfdd3e7bcfe4d6d3208db1644b75779170847faa"
+  },
+  "nodeGroups": [],
+  "id": "1VzQ0AhcZ6APDkGQ",
+  "tags": []
+}
